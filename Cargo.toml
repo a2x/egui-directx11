@@ -3,10 +3,8 @@ name = "egui-directx11"
 version = "0.12.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-
 repository = "https://github.com/Nekomaru-PKU/egui-directx11"
 authors = ["Nekomaru <Nekomaru@pku.edu.cn>"]
-
 description = "This crate provides a Direct3D11 renderer for `egui`."
 categories = ["gui", "game-development"]
 keywords = ["gui", "egui", "dx11", "d3d11", "directx11"]
@@ -15,17 +13,16 @@ keywords = ["gui", "egui", "dx11", "d3d11", "directx11"]
 targets = ["x86_64-pc-windows-msvc"]
 
 [dependencies]
-log = "0.4.28"
-egui = "0.33.0"
-windows = { version = "0.62.2", features = [
-    "Win32_Graphics_Dxgi_Common",
+egui = { version = "0.34", default-features = false }
+log = "0.4"
+windows = { version = "0.62", features = [
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Direct3D11",
-]}
+    "Win32_Graphics_Dxgi_Common",
+] }
 
 [dev-dependencies]
-egui_demo_lib = "0.33.0"
-egui-winit = { version = "0.33.0", default-features = false }
-pretty_env_logger = "0.5.0"
-winit = { version = "0.30.11", default-features = false, features = ["rwh_06"] }
-jpeg-decoder = { version = "0.3.2" }
+egui_demo_lib = "0.34"
+egui-winit = { version = "0.34", default-features = false }
+jpeg-decoder = "0.3.2"
+winit = { version = "0.30", default-features = false, features = ["rwh_06"] }

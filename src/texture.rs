@@ -71,8 +71,10 @@ impl TexturePool {
         srv: ID3D11ShaderResourceView,
     ) -> TextureId {
         let id = TextureId::User(self.next_user_texture_id);
+
         self.next_user_texture_id += 1;
         self.pool.insert(id, Texture::User { srv });
+
         id
     }
 
@@ -81,6 +83,7 @@ impl TexturePool {
     pub fn unregister_user_texture(&mut self, tid: TextureId) -> bool {
         if self.pool.get(&tid).is_some_and(|t| t.is_user()) {
             self.pool.remove(&tid);
+
             true
         } else {
             false
@@ -101,6 +104,7 @@ impl TexturePool {
                     tid,
                     Self::create_managed_texture(&self.device, delta.image)?,
                 );
+
                 // the old texture is returned and dropped here, freeing
                 // all its gpu resource.
             } else if let Some(tex) =
@@ -118,11 +122,13 @@ impl TexturePool {
                 );
             }
         }
+
         for tid in delta.free {
             if self.pool.get(&tid).is_some_and(|t| t.is_managed()) {
                 self.pool.remove(&tid);
             }
         }
+
         Ok(())
     }
 
@@ -136,11 +142,13 @@ impl TexturePool {
             log::warn!(
                 "attempted to partially update a user texture, which is not supported"
             );
+
             return Ok(());
         };
 
         let subr = unsafe {
             let mut output = D3D11_MAPPED_SUBRESOURCE::default();
+
             ctx.Map(
                 &old.tex,
                 0,
@@ -148,8 +156,10 @@ impl TexturePool {
                 0,
                 Some(&mut output),
             )?;
+
             output
         };
+
         match image {
             ImageData::Color(f) => {
                 let data = unsafe {
@@ -157,10 +167,12 @@ impl TexturePool {
                         subr.pData as *mut Color32,
                         old.pixels.len(),
                     );
+
                     slice.as_mut_ptr().copy_from_nonoverlapping(
                         old.pixels.as_ptr(),
                         old.pixels.len(),
                     );
+
                     slice
                 };
 
@@ -168,13 +180,16 @@ impl TexturePool {
                     for x in 0..f.width() {
                         let whole = (ny + y) * old.width + nx + x;
                         let frac = y * f.width() + x;
+
                         old.pixels[whole] = f.pixels[frac];
                         data[whole] = f.pixels[frac];
                     }
                 }
             },
         }
+
         unsafe { ctx.Unmap(&old.tex, 0) };
+
         Ok(())
     }
 
@@ -206,11 +221,12 @@ impl TexturePool {
 
         let subresource_data = D3D11_SUBRESOURCE_DATA {
             pSysMem: pixels.as_ptr() as _,
-            SysMemPitch: (width * mem::size_of::<Color32>()) as u32,
+            SysMemPitch: (width * size_of::<Color32>()) as u32,
             SysMemSlicePitch: 0,
         };
 
         let mut tex = None;
+
         unsafe {
             device.CreateTexture2D(
                 &desc,
@@ -218,10 +234,13 @@ impl TexturePool {
                 Some(&mut tex),
             )
         }?;
+
         let tex = tex.unwrap();
 
         let mut srv = None;
+
         unsafe { device.CreateShaderResourceView(&tex, None, Some(&mut srv)) }?;
+
         let srv = srv.unwrap();
 
         Ok(Texture::Managed(ManagedTexture {

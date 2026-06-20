@@ -34,22 +34,23 @@ struct DemoState {
 }
 
 impl DemoState {
-    fn ui(&mut self, ctx: &egui::Context) {
-        let args = env::args().skip(1).collect::<Vec<_>>();
-        let args = args.iter().map(String::as_str).collect::<Vec<_>>();
+    fn ui(&mut self, ui: &mut egui::Ui) {
+        let args: Vec<String> = env::args().skip(1).collect();
+        let args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+
         match &args[..] {
-            [] => self.egui_demo.ui(ctx),
-            ["color-test"] => self.color_test(ctx),
+            [] => self.egui_demo.ui(ui),
+            ["color-test"] => self.color_test(ui),
             _ => panic!("Unknown arguments: {:?}", args),
         }
     }
 
     fn color_test(&mut self, ctx: &egui::Context) {
-        use egui::Window;
+        use egui::{Align2, ScrollArea, Window};
 
         const WINDOW_WIDTH: f32 = 640.0;
 
-        let screen_rect = ctx.input(|input| input.content_rect());
+        let screen_rect = ctx.input(|input| input.screen_rect());
         let window_height = screen_rect.height() - 60.0;
 
         Window::new("Color Test")
@@ -64,8 +65,9 @@ impl DemoState {
             .min_height(window_height)
             .max_height(window_height)
             .show(ctx, |ui| {
-                ScrollArea::vertical()
-                    .show(ui, |ui| self.egui_color_test.ui(ui))
+                ScrollArea::vertical().show(ui, |ui| {
+                    self.egui_color_test.ui(ui);
+                });
             });
     }
 }
@@ -89,6 +91,7 @@ trait App: Sized {
 impl App for DemoApp {
     fn new(window: &Window) -> Self {
         use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
         let RawWindowHandle::Win32(window_handle) = window
             .window_handle()
             .expect("Failed to get window handle")
@@ -99,6 +102,7 @@ impl App for DemoApp {
 
         let (device, device_context, swap_chain) = {
             let PhysicalSize { width, height } = window.inner_size();
+
             Self::create_device_and_swap_chain(
                 HWND(window_handle.hwnd.get() as _),
                 width,
@@ -113,9 +117,11 @@ impl App for DemoApp {
                 .expect("Failed to create render target"),
         );
 
-        let egui_ctx = egui::Context::default();
+        let egui_ctx = Context::default();
+
         let egui_renderer = egui_directx11::Renderer::new(&device)
             .expect("Failed to create egui renderer");
+
         let egui_winit = egui_winit::State::new(
             egui_ctx.clone(),
             egui_ctx.viewport_id(),
@@ -139,9 +145,11 @@ impl App for DemoApp {
 
     fn on_event(&mut self, window: &Window, event: &WindowEvent) {
         let egui_response = self.egui_winit.on_window_event(window, event);
+
         if egui_response.repaint {
             window.request_redraw();
         }
+
         if !egui_response.consumed {
             match event {
                 WindowEvent::Resized(new_size) => self.resize(new_size),
@@ -154,31 +162,35 @@ impl App for DemoApp {
 
 impl DemoApp {
     fn render(&mut self, window: &Window) {
-        if let Some(render_target) = &self.render_target {
-            let egui_input = self.egui_winit.take_egui_input(window);
-            let egui_output = self.egui_ctx.run(egui_input, |ctx| {
-                self.state.ui(ctx);
-            });
-            let (renderer_output, platform_output, _) =
-                egui_directx11::split_output(egui_output);
-            self.egui_winit
-                .handle_platform_output(window, platform_output);
-            unsafe {
-                self.device_context.ClearRenderTargetView(
-                    render_target,
-                    &[0.0, 0.0, 0.0, 1.0],
-                );
-            }
-            let _ = self.egui_renderer.render(
-                &self.device_context,
-                render_target,
-                &self.egui_ctx,
-                renderer_output,
-            );
-            let _ = unsafe { self.swap_chain.Present(1, DXGI_PRESENT(0)) };
-        } else {
-            unreachable!()
+        let Some(render_target) = &self.render_target else {
+            unreachable!();
+        };
+
+        let egui_input = self.egui_winit.take_egui_input(window);
+
+        let full_output = self.egui_ctx.run_ui(egui_input, |ui| {
+            self.state.ui(ui);
+        });
+
+        let (renderer_output, platform_output, _textures_delta) =
+            egui_directx11::split_output(full_output);
+
+        self.egui_winit
+            .handle_platform_output(window, platform_output);
+
+        unsafe {
+            self.device_context
+                .ClearRenderTargetView(render_target, &[0.0, 0.0, 0.0, 1.0]);
         }
+
+        let _ = self.egui_renderer.render(
+            &self.device_context,
+            render_target,
+            &self.egui_ctx,
+            renderer_output,
+        );
+
+        let _ = unsafe { self.swap_chain.Present(1, DXGI_PRESENT(0)) };
     }
 
     fn resize(&mut self, new_size: &PhysicalSize<u32>) {
@@ -207,6 +219,7 @@ impl DemoApp {
 
         let mut device = None;
         let mut device_context = None;
+
         unsafe {
             D3D11CreateDevice(
                 &dxgi_adapter,
@@ -224,6 +237,7 @@ impl DemoApp {
                 Some(&mut device_context),
             )
         }?;
+
         let device = device.unwrap();
         let device_context = device_context.unwrap();
 
@@ -247,6 +261,7 @@ impl DemoApp {
         };
 
         let mut swap_chain = None;
+
         unsafe {
             dxgi_factory.CreateSwapChain(
                 &device,
@@ -255,11 +270,13 @@ impl DemoApp {
             )
         }
         .ok()?;
+
         let swap_chain = swap_chain.unwrap();
 
         unsafe {
             dxgi_factory.MakeWindowAssociation(window, DXGI_MWA_NO_ALT_ENTER)
         }?;
+
         Ok((device, device_context, swap_chain))
     }
 
@@ -269,7 +286,9 @@ impl DemoApp {
     ) -> windows::core::Result<ID3D11RenderTargetView> {
         let swap_chain_texture =
             unsafe { swap_chain.GetBuffer::<ID3D11Texture2D>(0) }?;
+
         let mut render_target = None;
+
         unsafe {
             device.CreateRenderTargetView(
                 &swap_chain_texture,
@@ -277,6 +296,7 @@ impl DemoApp {
                 Some(&mut render_target),
             )
         }?;
+
         Ok(render_target.unwrap())
     }
 
@@ -287,6 +307,7 @@ impl DemoApp {
         new_format: DXGI_FORMAT,
     ) -> windows::core::Result<()> {
         self.render_target.take();
+
         unsafe {
             self.swap_chain.ResizeBuffers(
                 2,
@@ -296,11 +317,13 @@ impl DemoApp {
                 DXGI_SWAP_CHAIN_FLAG(0),
             )
         }?;
+
         self.render_target
             .replace(Self::create_render_target_for_swap_chain(
                 &self.device,
                 &self.swap_chain,
             )?);
+
         Ok(())
     }
 }
@@ -328,6 +351,7 @@ impl<T: App> ApplicationHandler for AppRunner<T> {
         let window = event_loop
             .create_window(self.window_attributes.clone())
             .expect("Failed to create window");
+
         self.app = Some(T::new(&window));
         self.window = Some(window);
     }

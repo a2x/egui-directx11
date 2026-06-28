@@ -1,24 +1,19 @@
-use std::{io::BufReader, ptr};
-
-use egui::*;
+use std::io::BufReader;
+use std::ptr;
 
 use jpeg_decoder::Decoder;
-use windows::Win32::{
-    Foundation::{HMODULE, HWND},
-    Graphics::{
-        Direct3D::{D3D_DRIVER_TYPE_UNKNOWN, D3D_FEATURE_LEVEL_11_0},
-        Direct3D11::*,
-        Dxgi::{Common::*, *},
-    },
-};
 
-use winit::{
-    application::ApplicationHandler,
-    dpi::PhysicalSize,
-    event::WindowEvent,
-    event_loop::{ActiveEventLoop, EventLoop},
-    window::{Window, WindowAttributes, WindowId},
-};
+use windows::Win32::Foundation::{HMODULE, HWND};
+use windows::Win32::Graphics::Direct3D::*;
+use windows::Win32::Graphics::Direct3D11::*;
+use windows::Win32::Graphics::Dxgi::Common::*;
+use windows::Win32::Graphics::Dxgi::*;
+
+use winit::application::ApplicationHandler;
+use winit::dpi::PhysicalSize;
+use winit::event::WindowEvent;
+use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::window::{Window, WindowAttributes, WindowId};
 
 fn main() {
     AppRunner::<DemoApp>::run(
@@ -36,7 +31,7 @@ struct DemoApp {
     egui_ctx: egui::Context,
     egui_renderer: egui_directx11::Renderer,
     egui_winit: egui_winit::State,
-    tex: TextureId,
+    texture: egui::TextureId,
 }
 
 trait App: Sized {
@@ -48,6 +43,7 @@ trait App: Sized {
 impl App for DemoApp {
     fn new(window: &Window) -> Self {
         use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
         let RawWindowHandle::Win32(window_handle) = window
             .window_handle()
             .expect("Failed to get window handle")
@@ -58,6 +54,7 @@ impl App for DemoApp {
 
         let (device, device_context, swap_chain) = {
             let PhysicalSize { width, height } = window.inner_size();
+
             Self::create_device_and_swap_chain(
                 HWND(window_handle.hwnd.get() as _),
                 width,
@@ -73,8 +70,10 @@ impl App for DemoApp {
         );
 
         let egui_ctx = egui::Context::default();
+
         let mut egui_renderer = egui_directx11::Renderer::new(&device)
             .expect("Failed to create egui renderer");
+
         let egui_winit = egui_winit::State::new(
             egui_ctx.clone(),
             egui_ctx.viewport_id(),
@@ -89,6 +88,7 @@ impl App for DemoApp {
             Decoder::new(BufReader::new(&include_bytes!("./1080p.jpg")[..]))
                 .decode()
                 .unwrap();
+
         let bytes = Vec::from_iter(bytes.chunks_exact(3).map(|slice| {
             u32::from_le_bytes([slice[0], slice[1], slice[2], 0])
         }));
@@ -115,19 +115,30 @@ impl App for DemoApp {
             SysMemSlicePitch: 0,
         };
 
-        let mut tex = None;
+        let mut texture = None;
+
         unsafe {
             device.CreateTexture2D(
                 &desc,
                 Some(&subresource_data),
-                Some(&mut tex),
+                Some(&mut texture),
             )
         }
         .unwrap();
 
-        let tex = tex.unwrap();
+        let texture = texture.unwrap();
+
         let mut shader_resource_view = None;
-        unsafe { device.CreateShaderResourceView(&tex, None, Some(&raw mut shader_resource_view)) }.unwrap();
+
+        unsafe {
+            device.CreateShaderResourceView(
+                &texture,
+                None,
+                Some(&raw mut shader_resource_view),
+            )
+        }
+        .unwrap();
+
         let srv = shader_resource_view.unwrap();
         let id = egui_renderer.register_user_texture(srv);
 
@@ -139,12 +150,13 @@ impl App for DemoApp {
             egui_ctx,
             egui_renderer,
             egui_winit,
-            tex: id,
+            texture: id,
         }
     }
 
     fn on_event(&mut self, window: &Window, event: &WindowEvent) {
         let egui_response = self.egui_winit.on_window_event(&window, event);
+
         if !egui_response.consumed {
             match event {
                 WindowEvent::Resized(new_size) => self.resize(new_size),
@@ -155,7 +167,7 @@ impl App for DemoApp {
     }
 
     fn on_exit(&mut self) {
-        self.egui_renderer.unregister_user_texture(self.tex);
+        self.egui_renderer.unregister_user_texture(self.texture);
     }
 }
 
@@ -163,32 +175,39 @@ impl DemoApp {
     fn render(&mut self, window: &Window) {
         if let Some(render_target) = &self.render_target {
             let egui_input = self.egui_winit.take_egui_input(window);
-            let egui_output = self.egui_ctx.run(egui_input, |ctx| {
-                CentralPanel::default().show(ctx, |ui| {
-                    let image = Image::from_texture((
-                        self.tex,
-                        Vec2::new(1920.0, 1080.0),
-                    ))
-                    .shrink_to_fit();
-                    ui.add(image);
+
+            let egui_output = self.egui_ctx.run_ui(egui_input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    ui.add(
+                        egui::Image::from_texture((
+                            self.texture,
+                            egui::Vec2::new(1920.0, 1080.0),
+                        ))
+                        .shrink_to_fit(),
+                    );
                 });
             });
+
             let (renderer_output, platform_output, _) =
                 egui_directx11::split_output(egui_output);
+
             self.egui_winit
                 .handle_platform_output(window, platform_output);
+
             unsafe {
                 self.device_context.ClearRenderTargetView(
                     render_target,
                     &[0.0, 0.0, 0.0, 1.0],
                 );
             }
+
             let _ = self.egui_renderer.render(
                 &self.device_context,
                 render_target,
                 &self.egui_ctx,
                 renderer_output,
             );
+
             let _ = unsafe { self.swap_chain.Present(1, DXGI_PRESENT(0)) };
         } else {
             unreachable!()
@@ -216,11 +235,13 @@ impl DemoApp {
         IDXGISwapChain,
     )> {
         let dxgi_factory: IDXGIFactory = unsafe { CreateDXGIFactory() }?;
+
         let dxgi_adapter: IDXGIAdapter =
             unsafe { dxgi_factory.EnumAdapters(0) }?;
 
         let mut device = None;
         let mut device_context = None;
+
         unsafe {
             D3D11CreateDevice(
                 &dxgi_adapter,
@@ -238,6 +259,7 @@ impl DemoApp {
                 Some(&mut device_context),
             )
         }?;
+
         let device = device.unwrap();
         let device_context = device_context.unwrap();
 
@@ -261,6 +283,7 @@ impl DemoApp {
         };
 
         let mut swap_chain = None;
+
         unsafe {
             dxgi_factory.CreateSwapChain(
                 &device,
@@ -269,11 +292,13 @@ impl DemoApp {
             )
         }
         .ok()?;
+
         let swap_chain = swap_chain.unwrap();
 
         unsafe {
             dxgi_factory.MakeWindowAssociation(window, DXGI_MWA_NO_ALT_ENTER)
         }?;
+
         Ok((device, device_context, swap_chain))
     }
 
@@ -283,7 +308,9 @@ impl DemoApp {
     ) -> windows::core::Result<ID3D11RenderTargetView> {
         let swap_chain_texture =
             unsafe { swap_chain.GetBuffer::<ID3D11Texture2D>(0) }?;
+
         let mut render_target = None;
+
         unsafe {
             device.CreateRenderTargetView(
                 &swap_chain_texture,
@@ -291,6 +318,7 @@ impl DemoApp {
                 Some(&mut render_target),
             )
         }?;
+
         Ok(render_target.unwrap())
     }
 
@@ -301,6 +329,7 @@ impl DemoApp {
         new_format: DXGI_FORMAT,
     ) -> windows::core::Result<()> {
         self.render_target.take();
+
         unsafe {
             self.swap_chain.ResizeBuffers(
                 2,
@@ -310,11 +339,13 @@ impl DemoApp {
                 DXGI_SWAP_CHAIN_FLAG(0),
             )
         }?;
+
         self.render_target
             .replace(Self::create_render_target_for_swap_chain(
                 &self.device,
                 &self.swap_chain,
             )?);
+
         Ok(())
     }
 }
@@ -342,6 +373,7 @@ impl<T: App> ApplicationHandler for AppRunner<T> {
         let window = event_loop
             .create_window(self.window_attributes.clone())
             .expect("Failed to create window");
+
         self.app = Some(T::new(&window));
         self.window = Some(window);
     }

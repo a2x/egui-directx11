@@ -1,23 +1,16 @@
 use std::{env, ptr};
 
-use egui::*;
+use windows::Win32::Foundation::{HMODULE, HWND};
+use windows::Win32::Graphics::Direct3D::*;
+use windows::Win32::Graphics::Direct3D11::*;
+use windows::Win32::Graphics::Dxgi::Common::*;
+use windows::Win32::Graphics::Dxgi::*;
 
-use windows::Win32::{
-    Foundation::{HMODULE, HWND},
-    Graphics::{
-        Direct3D::{D3D_DRIVER_TYPE_UNKNOWN, D3D_FEATURE_LEVEL_11_0},
-        Direct3D11::*,
-        Dxgi::{Common::*, *},
-    },
-};
-
-use winit::{
-    application::ApplicationHandler,
-    dpi::PhysicalSize,
-    event::WindowEvent,
-    event_loop::{ActiveEventLoop, EventLoop},
-    window::{Window, WindowAttributes, WindowId},
-};
+use winit::application::ApplicationHandler;
+use winit::dpi::PhysicalSize;
+use winit::event::WindowEvent;
+use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::window::{Window, WindowAttributes, WindowId};
 
 fn main() {
     AppRunner::<DemoApp>::run(
@@ -50,7 +43,7 @@ impl DemoState {
 
         const WINDOW_WIDTH: f32 = 640.0;
 
-        let screen_rect = ctx.input(|input| input.screen_rect());
+        let screen_rect = ctx.content_rect();
         let window_height = screen_rect.height() - 60.0;
 
         Window::new("Color Test")
@@ -117,7 +110,7 @@ impl App for DemoApp {
                 .expect("Failed to create render target"),
         );
 
-        let egui_ctx = Context::default();
+        let egui_ctx = egui::Context::default();
 
         let egui_renderer = egui_directx11::Renderer::new(&device)
             .expect("Failed to create egui renderer");

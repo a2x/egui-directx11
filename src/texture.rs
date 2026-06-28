@@ -8,17 +8,17 @@
 //
 // Nekomaru, March 2024
 
-use std::{collections::HashMap, mem, slice};
+use std::collections::HashMap;
+use std::slice;
 
 use egui::{Color32, ImageData, TextureId, TexturesDelta};
 
-use windows::{
-    Win32::Graphics::{Direct3D11::*, Dxgi::Common::*},
-    core::Result,
-};
+use windows::Win32::Graphics::Direct3D11::*;
+use windows::Win32::Graphics::Dxgi::Common::*;
+use windows::core::Result;
 
 struct ManagedTexture {
-    tex: ID3D11Texture2D,
+    texture: ID3D11Texture2D,
     srv: ID3D11ShaderResourceView,
     pixels: Vec<Color32>,
     width: usize,
@@ -30,6 +30,7 @@ enum Texture {
     /// A user-provided texture (registered from an existing shader resource view)
     User { srv: ID3D11ShaderResourceView },
 }
+
 impl Texture {
     pub fn is_managed(&self) -> bool {
         matches!(self, Texture::Managed(_))
@@ -150,7 +151,7 @@ impl TexturePool {
             let mut output = D3D11_MAPPED_SUBRESOURCE::default();
 
             ctx.Map(
-                &old.tex,
+                &old.texture,
                 0,
                 D3D11_MAP_WRITE_DISCARD,
                 0,
@@ -188,7 +189,7 @@ impl TexturePool {
             },
         }
 
-        unsafe { ctx.Unmap(&old.tex, 0) };
+        unsafe { ctx.Unmap(&old.texture, 0) };
 
         Ok(())
     }
@@ -225,26 +226,28 @@ impl TexturePool {
             SysMemSlicePitch: 0,
         };
 
-        let mut tex = None;
+        let mut texture = None;
 
         unsafe {
             device.CreateTexture2D(
                 &desc,
                 Some(&subresource_data),
-                Some(&mut tex),
+                Some(&mut texture),
             )
         }?;
 
-        let tex = tex.unwrap();
+        let texture = texture.unwrap();
 
         let mut srv = None;
 
-        unsafe { device.CreateShaderResourceView(&tex, None, Some(&mut srv)) }?;
+        unsafe {
+            device.CreateShaderResourceView(&texture, None, Some(&mut srv))
+        }?;
 
         let srv = srv.unwrap();
 
         Ok(Texture::Managed(ManagedTexture {
-            tex,
+            texture,
             srv,
             width,
             pixels,

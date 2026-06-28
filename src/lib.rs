@@ -23,17 +23,17 @@
 
 use std::mem;
 
-use egui::{
-    ClippedPrimitive, Pos2,
-    epaint::{ClippedShape, Primitive, Vertex, textures::TexturesDelta},
-};
-
-use windows::Win32::Foundation::RECT;
-use windows::Win32::Graphics::{Direct3D::*, Direct3D11::*, Dxgi::Common::*};
-use windows::core::BOOL;
-use windows::core::{Interface, Result};
+use egui::epaint::textures::TexturesDelta;
+use egui::epaint::{ClippedShape, Primitive, Vertex};
+use egui::{ClippedPrimitive, Pos2};
 
 use texture::TexturePool;
+
+use windows::Win32::Foundation::RECT;
+use windows::Win32::Graphics::Direct3D::*;
+use windows::Win32::Graphics::Direct3D11::*;
+use windows::Win32::Graphics::Dxgi::Common::*;
+use windows::core::{BOOL, Interface, Result};
 
 mod texture;
 
@@ -105,9 +105,9 @@ struct VertexData {
 }
 
 struct MeshData {
-    vtx: Vec<VertexData>,
-    idx: Vec<u32>,
-    tex: egui::TextureId,
+    vertices: Vec<VertexData>,
+    indices: Vec<u32>,
+    texture: egui::TextureId,
     clip_rect: egui::Rect,
 }
 
@@ -306,7 +306,7 @@ impl Renderer {
                 }
 
                 Some(MeshData {
-                    vtx: mesh
+                    vertices: mesh
                         .vertices
                         .into_iter()
                         .map(|Vertex { pos, uv, color }| VertexData {
@@ -325,8 +325,8 @@ impl Renderer {
                             ],
                         })
                         .collect(),
-                    idx: mesh.indices,
-                    tex: mesh.texture_id,
+                    indices: mesh.indices,
+                    texture: mesh.texture_id,
                     clip_rect: clip_rect
                         * egui_output.pixels_per_point
                         * zoom_factor,
@@ -379,8 +379,8 @@ impl Renderer {
         texture_pool: &TexturePool,
         mesh: MeshData,
     ) -> Result<()> {
-        let vb = Self::create_index_buffer(device, &mesh.idx)?;
-        let ib = Self::create_vertex_buffer(device, &mesh.vtx)?;
+        let vb = Self::create_index_buffer(device, &mesh.indices)?;
+        let ib = Self::create_vertex_buffer(device, &mesh.vertices)?;
 
         unsafe {
             device_context.IASetVertexBuffers(
@@ -401,7 +401,7 @@ impl Renderer {
             }]));
         }
 
-        if let Some(srv) = texture_pool.get_srv(mesh.tex) {
+        if let Some(srv) = texture_pool.get_srv(mesh.texture) {
             unsafe {
                 device_context.PSSetShaderResources(0, Some(&[Some(srv)]))
             };
@@ -411,11 +411,11 @@ impl Renderer {
                     "egui wants to sample a non-existing texture {:?}.",
                     "this request will be ignored."
                 ),
-                mesh.tex
+                mesh.texture
             );
         };
 
-        unsafe { device_context.DrawIndexed(mesh.idx.len() as _, 0, 0) };
+        unsafe { device_context.DrawIndexed(mesh.indices.len() as _, 0, 0) };
 
         Ok(())
     }
@@ -556,11 +556,12 @@ impl Renderer {
     fn get_render_target_size(
         rtv: &ID3D11RenderTargetView,
     ) -> Result<(u32, u32)> {
-        let tex = unsafe { rtv.GetResource() }?.cast::<ID3D11Texture2D>()?;
+        let texture =
+            unsafe { rtv.GetResource() }?.cast::<ID3D11Texture2D>()?;
 
         let mut desc = zeroed();
 
-        unsafe { tex.GetDesc(&mut desc) };
+        unsafe { texture.GetDesc(&mut desc) };
 
         Ok((desc.Width, desc.Height))
     }

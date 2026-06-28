@@ -13,7 +13,7 @@ keywords = ["gui", "egui", "dx11", "d3d11", "directx11"]
 targets = ["x86_64-pc-windows-msvc"]
 
 [dependencies]
-egui = { version = "0.34", default-features = false }
+egui = "0.35"
 log = "0.4"
 windows = { version = "0.62", features = [
     "Win32_Graphics_Direct3D",
@@ -22,7 +22,7 @@ windows = { version = "0.62", features = [
 ] }
 
 [dev-dependencies]
-egui_demo_lib = "0.34"
-egui-winit = { version = "0.34", default-features = false }
+egui_demo_lib = "0.35"
+egui-winit = { version = "0.35", default-features = false }
 jpeg-decoder = "0.3.2"
 winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
